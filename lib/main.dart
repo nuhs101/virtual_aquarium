@@ -1,9 +1,11 @@
+// ignore_for_file: deprecated_member_use
+
+import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class Fish {
@@ -26,12 +28,12 @@ class AquariumScreen extends StatefulWidget {
   const AquariumScreen({super.key});
 
   @override
-  State<AquariumScreen> createState() => _AquariumScreenState();
+  // ignore: library_private_types_in_public_api
+  _AquariumScreenState createState() => _AquariumScreenState();
 }
 
 class _AquariumScreenState extends State<AquariumScreen>
     with TickerProviderStateMixin {
-  AnimationController? _controller;
   List<Fish> fishList = [];
   Color selectedColor = Colors.blue;
   double selectedSpeed = 1.0;
@@ -39,10 +41,6 @@ class _AquariumScreenState extends State<AquariumScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    );
     _loadSettings();
   }
 
@@ -71,7 +69,7 @@ class _AquariumScreenState extends State<AquariumScreen>
             color: Colors.lightBlue[50],
             child: Stack(
               children:
-                  fishList.map((fish) {
+                  fishList.map<Widget>((fish) {
                     return AnimatedFish(fish: fish);
                   }).toList(),
             ),
@@ -118,16 +116,83 @@ class _AquariumScreenState extends State<AquariumScreen>
       ),
     );
   }
+
+  void _addFish() {
+    if (fishList.length < 10) {
+      setState(() {
+        fishList.add(Fish(color: selectedColor, speed: selectedSpeed));
+      });
+    }
+  }
+
+  void _saveSettings() async {
+    Database db = await openDatabase(
+      join(await getDatabasesPath(), 'settings.db'),
+      version: 1,
+      onCreate: (db, version) {
+        return db.execute(
+          'CREATE TABLE settings(id INTEGER PRIMARY KEY, color INTEGER, speed REAL)',
+        );
+      },
+    );
+
+    await db.insert('settings', {
+      'color': selectedColor.value,
+      'speed': selectedSpeed,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
 }
 
-void _saveSettings() async {
-  Database db = await openDatabase(
-    join(await getDatabasesPath(), 'settings.db'),
-    version: 1,
-    onCreate: (db, version) {
-      return db.execute(
-        'CREATE TABLE settings(id INTEGER PRIMARY KEY, color INTEGER, speed REAL)',
-      );
-    },
-  );
+class AnimatedFish extends StatefulWidget {
+  final Fish fish;
+  const AnimatedFish({super.key, required this.fish});
+
+  @override
+  State<AnimatedFish> createState() => _AnimatedFishState();
+}
+
+class _AnimatedFishState extends State<AnimatedFish>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _fishMovement;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    _fishMovement = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(1.5, 1.5),
+    ).animate(_controller);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _fishMovement,
+      builder: (context, child) {
+        return Positioned(
+          left: 100.0 * _fishMovement.value.dx,
+          top: 100.0 * _fishMovement.value.dy,
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: widget.fish.color,
+              shape: BoxShape.circle,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 }
